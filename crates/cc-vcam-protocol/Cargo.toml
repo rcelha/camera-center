@@ -1,0 +1,10 @@
+[package]
+name = "cc-vcam-protocol"
+description = "Constants and shared-memory frame layout shared by the app and the Windows media source"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true

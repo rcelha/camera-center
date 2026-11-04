@@ -1,0 +1,22 @@
+[package]
+name = "cc-engine"
+description = "Threads wiring capture → pipeline → virtual camera, plus UI previews"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+arc-swap.workspace = true
+cc-capture.workspace = true
+cc-core.workspace = true
+cc-ml.workspace = true
+cc-virtualcam.workspace = true
+tracing.workspace = true
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+image.workspace = true

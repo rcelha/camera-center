@@ -1,0 +1,25 @@
+[package]
+name = "cc-ml"
+description = "ONNX Runtime based person segmentation"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+cc-core.workspace = true
+ort.workspace = true
+tracing.workspace = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+ort = { workspace = true, features = ["coreml"] }
+
+[target.'cfg(windows)'.dependencies]
+ort = { workspace = true, features = ["directml"] }
+
+[dev-dependencies]
+image.workspace = true
+
+[lints]
+workspace = true

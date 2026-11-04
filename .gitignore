@@ -1,0 +1,7 @@
+/target
+/dist
+.DS_Store
+*.toml.partial
+# Xcode user state
+platform/macos/CameraCenter.xcodeproj/project.xcworkspace/
+platform/macos/CameraCenter.xcodeproj/xcuserdata/

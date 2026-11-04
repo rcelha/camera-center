@@ -1,0 +1,26 @@
+# Versioned segmentation models. The .onnx files are stored with Git LFS.
+# `just verify-models` checks every file against its sha256 below;
+# `just fetch-models` re-downloads them from the pinned revisions.
+
+[[model]]
+id = "u2net_human_seg"
+file = "u2net_human_seg.onnx"
+sha256 = "01eb6a29a5c4d8edb30b56adad9bb3a2a0535338e480724a213e0acfd2d1c73c"
+size = 175997641
+source = "https://huggingface.co/skillsafe-ai/u2net-human-seg"
+revision = "ff100931227cdf51ca8aabed104f35f2539be35e"
+url = "https://huggingface.co/skillsafe-ai/u2net-human-seg/resolve/ff100931227cdf51ca8aabed104f35f2539be35e/u2net_human_seg.onnx"
+upstream = "https://github.com/danielgatis/rembg/releases/download/v0.0.0/u2net_human_seg.onnx"
+license = "Apache-2.0 (U-2-Net, Xuebin Qin et al.)"
+input = "input.1 float32 [1,3,320,320]"
+
+[[model]]
+id = "u2netp"
+file = "u2netp.onnx"
+sha256 = "309c8469258dda742793dce0ebea8e6dd393174f89934733ecc8b14c76f4ddd8"
+size = 4574861
+source = "https://huggingface.co/Heliosoph/u2net-onnx"
+revision = "7fc34deee10329bc039c10a73b98090d0c6f5c59"
+url = "https://huggingface.co/Heliosoph/u2net-onnx/resolve/7fc34deee10329bc039c10a73b98090d0c6f5c59/u2netp.onnx"
+license = "Apache-2.0 (U-2-Net, Xuebin Qin et al.)"
+input = "input.1 float32 [1,3,320,320]"
