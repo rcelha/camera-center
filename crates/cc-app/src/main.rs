@@ -1,6 +1,7 @@
 //! Camera Center desktop app.
 
 mod controller;
+mod tray;
 mod ui;
 #[cfg(test)]
 mod ui_tests;
@@ -14,6 +15,31 @@ use cc_core::AppConfig;
 use cc_engine::{Engine, EngineDeps};
 use freya::prelude::*;
 use tracing::warn;
+
+/// Handles shared by every main window instance and the tray.
+#[derive(Clone)]
+pub struct AppShared {
+    pub engine: Arc<Engine>,
+    pub config_path: Arc<PathBuf>,
+    pub previews: async_channel::Receiver<cc_engine::Previews>,
+    pub statuses: async_channel::Receiver<cc_engine::EngineStatus>,
+}
+
+/// Builds the main window. Called at startup and whenever the tray reopens
+/// it, so it always reflects the engine's current settings.
+pub fn main_window(shared: &AppShared) -> WindowConfig {
+    WindowConfig::new_app(ui::CameraCenterApp {
+        engine: shared.engine.clone(),
+        config_path: shared.config_path.clone(),
+        initial_config: (*shared.engine.config()).clone(),
+        previews: shared.previews.clone(),
+        statuses: shared.statuses.clone(),
+        initial_page: ui::Page::Main,
+    })
+    .with_title("Camera Center")
+    .with_size(1180.0, 820.0)
+    .with_min_size(900.0, 640.0)
+}
 
 fn config_path() -> Result<PathBuf> {
     if let Some(path) = std::env::var_os("CAMERA_CENTER_CONFIG") {
@@ -82,20 +108,22 @@ fn main() -> Result<()> {
             }
         })?;
 
+    let shared = AppShared {
+        engine,
+        config_path: Arc::new(config_path),
+        previews: preview_rx,
+        statuses: status_rx,
+    };
+    let tray_shared = shared.clone();
     launch(
-        LaunchConfig::new().with_window(
-            WindowConfig::new_app(ui::CameraCenterApp {
-                engine,
-                config_path: Arc::new(config_path),
-                initial_config: config,
-                previews: preview_rx,
-                statuses: status_rx,
-                initial_page: ui::Page::Main,
-            })
-            .with_title("Camera Center")
-            .with_size(1180.0, 820.0)
-            .with_min_size(900.0, 640.0),
-        ),
+        LaunchConfig::new()
+            .with_window(main_window(&shared))
+            // Closing the window keeps the engine (and the virtual camera)
+            // running; the tray reopens the window or quits.
+            .with_tray(tray::build, tray::handler(tray_shared)),
     );
+    // The event loop has exited (Quit): dropping the last engine handle stops
+    // capture and the virtual camera stream.
+    drop(shared);
     Ok(())
 }

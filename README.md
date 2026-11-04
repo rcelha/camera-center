@@ -17,6 +17,14 @@ The UI shows the original and processed feeds side by side, the virtual camera
 name and status, and a Settings page with: input device, processing resolution,
 segmentation model, background image and blur strength.
 
+Closing the window doesn't quit. Camera Center keeps processing and feeding the
+virtual camera from the system tray (the menu bar on macOS).
+- **Open Camera Center** (or left-click the icon on Windows/Linux) reopens the window.
+- **Quit Camera Center** stops everything.
+
+On Linux the tray needs an AppIndicator host: install `libayatana-appindicator3`,
+and on GNOME the AppIndicator extension.
+
 ## Architecture
 
 ```
