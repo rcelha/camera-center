@@ -1,0 +1,53 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+rust-version = "1.95"
+publish = false
+
+[workspace.dependencies]
+cc-core = { path = "crates/cc-core" }
+cc-ml = { path = "crates/cc-ml" }
+cc-capture = { path = "crates/cc-capture" }
+cc-virtualcam = { path = "crates/cc-virtualcam" }
+cc-engine = { path = "crates/cc-engine" }
+cc-vcam-protocol = { path = "crates/cc-vcam-protocol" }
+
+anyhow = "=1.0.104"
+async-channel = "=2.5.0"
+arc-swap = "=1.9.3"
+crossbeam-channel = "=0.5.17"
+directories = "=6.0.0"
+fast_image_resize = { version = "=6.1.0", features = ["rayon"] }
+freya = { version = "=0.4.3", features = ["engine", "tray"] }
+image = { version = "=0.25.10", default-features = false, features = ["png", "jpeg", "webp", "bmp"] }
+libc = "=0.2.191"
+nokhwa = { version = "=0.10.11", features = ["input-native"] }
+ort = "=2.0.0-rc.15"
+rayon = "=1.12.0"
+rfd = "=0.17.2"
+serde = { version = "=1.0.229", features = ["derive"] }
+toml = "=1.2.0"
+windows = "=0.62.2"
+windows-core = "=0.62.2"
+tracing = "=0.1.44"
+tracing-subscriber = { version = "=0.3.23", features = ["env-filter"] }
+
+[workspace.lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+
+[workspace.lints.clippy]
+dbg_macro = "warn"
+todo = "warn"
+
+[profile.dev.package."*"]
+opt-level = 3
+
+# Note: LTO is disabled on purpose; with LTO the statically linked ONNX Runtime
+# loses `__isPlatformVersionAtLeast` on macOS and the link fails.
+[profile.release]
+codegen-units = 4

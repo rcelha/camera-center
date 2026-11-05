@@ -1,0 +1,5 @@
+[toolchain]
+channel = "1.95.0"
+components = ["clippy", "rustfmt"]
+# Cross targets are only used for `just check-cross` type-checking.
+targets = ["aarch64-apple-darwin", "x86_64-pc-windows-msvc", "x86_64-unknown-linux-gnu"]

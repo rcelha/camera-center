@@ -1,0 +1,59 @@
+# cargo-deny configuration: advisories (RUSTSEC), licenses, bans, sources.
+# Run with `just check` (requires `cargo install --locked cargo-deny@0.20.2`).
+
+[graph]
+targets = [
+    "aarch64-apple-darwin",
+    "x86_64-pc-windows-msvc",
+    "x86_64-unknown-linux-gnu",
+]
+
+[advisories]
+version = 2
+yanked = "deny"
+# Accepted "unmaintained" advisories. All are transitive (none is a direct
+# dependency), none is a known vulnerability, and none has a maintained
+# replacement we can switch to without replacing Freya/nokhwa. Security
+# advisories are NOT ignored. Re-check each entry when upgrading Freya, nokhwa
+# or image: delete it once `cargo deny check advisories` no longer reports it.
+ignore = [
+    { id = "RUSTSEC-2024-0436", reason = "paste: proc-macro used by freya, nokhwa and image (pulp/rav1e); unmaintained, no upgrade available" },
+    { id = "RUSTSEC-2024-0370", reason = "proc-macro-error: via gtk 0.18 (freya-winit and tray-icon on Linux); unmaintained, no upgrade available" },
+    { id = "RUSTSEC-2026-0192", reason = "ttf-parser: via winit's sctk-adwaita Wayland decorations (freya); unmaintained, no upgrade available" },
+    { id = "RUSTSEC-2026-0370", reason = "zvariant: via zbus (accesskit_unix, mundy in freya); folded into zbus upstream, no upgrade available yet" },
+    { id = "RUSTSEC-2026-0371", reason = "zbus_names: via zbus (accesskit_unix, mundy in freya); folded into zbus upstream, no upgrade available yet" },
+    { id = "RUSTSEC-2026-0372", reason = "zvariant_derive: via zbus (accesskit_unix, mundy in freya); folded into zbus upstream, no upgrade available yet" },
+]
+
+[licenses]
+version = 2
+confidence-threshold = 0.9
+allow = [
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "BSL-1.0",
+    "CC0-1.0",
+    "CDLA-Permissive-2.0",
+    "IJG",
+    "ISC",
+    "MIT",
+    "MIT-0",
+    "MPL-2.0",
+    "Unicode-3.0",
+    "Unlicense",
+    "Zlib",
+]
+
+[licenses.private]
+ignore = true
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+allow-wildcard-paths = true
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
