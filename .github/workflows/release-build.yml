@@ -51,9 +51,9 @@ jobs:
         include:
           - { name: macOS, os: macos-26, package: package-osx }
           - { name: Windows, os: windows-2025, package: package-windows }
-          # Oldest supported Ubuntu runner, so the AppImage and the .deb's
-          # glibc requirement work on older distributions too.
-          - { name: Linux, os: ubuntu-22.04, package: package-linux }
+          # Not 22.04: ort's prebuilt static ONNX Runtime needs glibc >= 2.38
+          # (__isoc23_strtol), so the packages need glibc 2.39 (Ubuntu 24.04+).
+          - { name: Linux, os: ubuntu-24.04, package: package-linux }
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

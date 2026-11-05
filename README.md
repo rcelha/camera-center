@@ -104,7 +104,9 @@ and the latest `vX.Y.Z` tag is the previous release.
 | Windows (x64) | `camera-center-<v>-windows-x64.zip` (with `INSTALL.txt`) |
 | Linux (x64) | `camera-center_<v>_amd64.deb`, `camera-center-<v>-x86_64.AppImage` |
 
-The Linux packages are built on Ubuntu 22.04, so they need glibc 2.35 or newer.
+The Linux packages are built on Ubuntu 24.04 and need glibc 2.39 or newer
+(Ubuntu 24.04+, Debian 13+, Fedora 40+). The prebuilt ONNX Runtime needs
+glibc 2.38 or newer, so they can't be built on an older base.
 To rebuild the packages for an existing tag, run the *Release packages* workflow
 manually. Pull requests that change packaging (`justfile`, `platform/`,
 `crates/cc-app/Cargo.toml`, the workflow) build the packages as workflow
