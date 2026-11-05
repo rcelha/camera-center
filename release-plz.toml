@@ -1,0 +1,72 @@
+# release-plz: versioning, changelog and GitHub Releases (https://release-plz.dev).
+#
+# Camera Center ships as one product, so every crate shares the workspace
+# version through the `camera-center` version group. Nothing is published to
+# crates.io (`git_only`: the previous version is the latest `vX.Y.Z` tag).
+# Only `cc-app` writes the changelog, creates the tag and creates the GitHub
+# Release. The changelog also includes commits to the library crates.
+#
+# Flow (.github/workflows/release-plz.yml): every push to main updates a
+# "release" PR that bumps the version and the changelog. Merging that PR tags
+# `vX.Y.Z` and creates a draft release, then .github/workflows/release-build.yml
+# attaches the macOS, Windows and Linux packages and publishes the draft.
+
+[workspace]
+git_only = true
+publish = false
+# Binary-only product: cargo-semver-checks would only check internal APIs.
+semver_check = false
+# Release only when a release PR is merged, not on every push to main.
+release_always = false
+changelog_update = false
+git_tag_enable = false
+git_release_enable = false
+git_tag_name = "v{{ version }}"
+
+[[package]]
+name = "cc-app"
+version_group = "camera-center"
+changelog_update = true
+changelog_path = "CHANGELOG.md"
+changelog_include = [
+    "cc-capture",
+    "cc-core",
+    "cc-engine",
+    "cc-mf-source",
+    "cc-ml",
+    "cc-vcam-protocol",
+    "cc-virtualcam",
+]
+git_tag_enable = true
+git_release_enable = true
+git_release_name = "Camera Center v{{ version }}"
+# Published by release-build.yml once every platform's package is attached.
+git_release_draft = true
+
+[[package]]
+name = "cc-capture"
+version_group = "camera-center"
+
+[[package]]
+name = "cc-core"
+version_group = "camera-center"
+
+[[package]]
+name = "cc-engine"
+version_group = "camera-center"
+
+[[package]]
+name = "cc-mf-source"
+version_group = "camera-center"
+
+[[package]]
+name = "cc-ml"
+version_group = "camera-center"
+
+[[package]]
+name = "cc-vcam-protocol"
+version_group = "camera-center"
+
+[[package]]
+name = "cc-virtualcam"
+version_group = "camera-center"

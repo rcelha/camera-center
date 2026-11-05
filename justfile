@@ -72,6 +72,127 @@ build-linux:
     cp models/models.toml models/*.onnx "$out/models/"
     echo "built $out"
 
+# Package every platform the current host can build into dist/packages (the release workflow runs this per OS).
+package: package-osx package-windows package-linux
+
+# Package the macOS app as a drag-to-install .dmg. VERSION overrides the Cargo version in the file name.
+package-osx: build-osx
+    #!/usr/bin/env bash
+    set -euo pipefail
+    [ "{{host}}" = "macos" ] || { echo "skipping package-osx: requires a macOS host"; exit 0; }
+    version="${VERSION:-$(cargo pkgid -p cc-app)}"; version="${version##*[#@]}"
+    staging="{{target_dir}}/package/dmg"
+    rm -rf "$staging" && mkdir -p "$staging" "{{dist}}/packages"
+    ditto "{{dist}}/macos/CameraCenter.app" "$staging/CameraCenter.app"
+    ln -s /Applications "$staging/Applications"
+    out="{{dist}}/packages/camera-center-$version-macos-arm64.dmg"
+    rm -f "$out"
+    # hdiutil sometimes fails with "Resource busy" on CI runners; retry it.
+    for attempt in 1 2 3; do
+        hdiutil create -quiet -volname "Camera Center" -srcfolder "$staging" -format UDZO -ov "$out" && break
+        [ "$attempt" = 3 ] && exit 1
+        echo "hdiutil failed (attempt $attempt), retrying"; sleep 5
+    done
+    echo "packaged $out"
+
+# Package the Windows build as a .zip with install instructions. VERSION overrides the Cargo version.
+package-windows: build-windows
+    #!/usr/bin/env bash
+    set -euo pipefail
+    [ "{{host}}" = "windows" ] || { echo "skipping package-windows: requires a Windows host"; exit 0; }
+    version="${VERSION:-$(cargo pkgid -p cc-app)}"; version="${version##*[#@]}"
+    name="camera-center-$version-windows-x64"
+    staging="{{target_dir}}/package/$name"
+    rm -rf "$staging" && mkdir -p "$staging" "{{dist}}/packages"
+    cp -r "{{dist}}"/windows/* "$staging/"
+    printf '%s\r\n' \
+        'Camera Center for Windows 11 (x64)' \
+        '' \
+        'Install, from an elevated (Administrator) PowerShell in this folder:' \
+        '' \
+        '  $dest = "$env:ProgramFiles\CameraCenter"' \
+        '  New-Item -ItemType Directory -Force $dest | Out-Null' \
+        '  Copy-Item -Recurse -Force * $dest' \
+        '  regsvr32 /s "$dest\cc_mf_source.dll"' \
+        '' \
+        'The DLL must live outside your user profile: the Frame Server service that' \
+        'loads it runs as LocalService. Then start "$dest\camera-center.exe".' \
+        '' \
+        'Uninstall: regsvr32 /s /u "$env:ProgramFiles\CameraCenter\cc_mf_source.dll",' \
+        'then delete the folder.' \
+        > "$staging/INSTALL.txt"
+    out="{{dist}}/packages/$name.zip"
+    rm -f "$out"
+    powershell -NoProfile -NonInteractive -Command \
+        "Compress-Archive -Path '$(cygpath -w "$staging")' -DestinationPath '$(cygpath -w "$out")'"
+    echo "packaged $out"
+
+# Package the Linux build as a .deb and an AppImage.
+package-linux: package-deb package-appimage
+
+# Build the Debian package with cargo-deb. VERSION overrides the Cargo version.
+package-deb: build-linux
+    #!/usr/bin/env bash
+    set -euo pipefail
+    [ "{{host}}" = "linux" ] || { echo "skipping package-deb: requires a Linux host"; exit 0; }
+    command -v cargo-deb >/dev/null || { echo "cargo-deb missing: cargo install --locked cargo-deb@3.8.0"; exit 1; }
+    version="${VERSION:-$(cargo pkgid -p cc-app)}"; version="${version##*[#@]}"
+    mkdir -p "{{dist}}/packages"
+    out="{{dist}}/packages/camera-center_${version}_amd64.deb"
+    cargo deb -p cc-app --target x86_64-unknown-linux-gnu --no-build --deb-version "$version" -o "$out"
+    echo "packaged $out"
+
+# Build the x86_64 AppImage with linuxdeploy (downloaded at a pinned version and checksum). VERSION overrides the Cargo version.
+package-appimage: build-linux
+    #!/usr/bin/env bash
+    set -euo pipefail
+    [ "{{host}}" = "linux" ] || { echo "skipping package-appimage: requires a Linux host"; exit 0; }
+    [ "$(uname -m)" = "x86_64" ] || { echo "package-appimage requires an x86_64 host"; exit 1; }
+    version="${VERSION:-$(cargo pkgid -p cc-app)}"; version="${version##*[#@]}"
+
+    # Pinned packaging tools, verified before use. Bump the URL and the sha256 together.
+    tools="{{target_dir}}/package/tools"
+    mkdir -p "$tools"
+    fetch() { # name url sha256
+        local dest="$tools/$1"
+        if [ -f "$dest" ] && echo "$3  $dest" | sha256sum -c --status; then return; fi
+        curl -fsSL --retry 3 --retry-all-errors --proto '=https' -o "$dest.partial" "$2"
+        echo "$3  $dest.partial" | sha256sum -c --quiet || { echo "checksum mismatch for $1"; rm -f "$dest.partial"; exit 1; }
+        mv "$dest.partial" "$dest" && chmod +x "$dest"
+    }
+    fetch linuxdeploy-x86_64.AppImage \
+        https://github.com/linuxdeploy/linuxdeploy/releases/download/1-alpha-20251107-1/linuxdeploy-x86_64.AppImage \
+        c20cd71e3a4e3b80c3483cef793cda3f4e990aca14014d23c544ca3ce1270b4d
+    fetch linuxdeploy-plugin-gtk.sh \
+        https://raw.githubusercontent.com/linuxdeploy/linuxdeploy-plugin-gtk/7a3fbc31a9e5075073ff8790f26effbac5f84453/linuxdeploy-plugin-gtk.sh \
+        b0f4cbc684a0103a9651f0955b635eaea0096b3a66c0f5a2c2aa337960375171
+
+    # The tray icon dlopens libayatana-appindicator3, so linuxdeploy can't find it through ldd.
+    appindicator=$(/sbin/ldconfig -p | awk '/libayatana-appindicator3\.so\.1 /{print $NF; exit}')
+    [ -n "$appindicator" ] || { echo "libayatana-appindicator3.so.1 not found (apt install libayatana-appindicator3-dev)"; exit 1; }
+
+    work="{{target_dir}}/package/appimage"
+    appdir="$work/AppDir"
+    rm -rf "$work" && mkdir -p "$appdir/usr/share/camera-center/models" "{{dist}}/packages"
+    install -Dm755 "{{target_dir}}/x86_64-unknown-linux-gnu/release/camera-center" "$appdir/usr/bin/camera-center"
+    install -m644 models/models.toml models/*.onnx "$appdir/usr/share/camera-center/models/"
+    install -m644 crates/cc-app/assets/tray.png "$work/camera-center.png"
+
+    out="{{dist}}/packages/camera-center-$version-x86_64.AppImage"
+    rm -f "$out"
+    # APPIMAGE_EXTRACT_AND_RUN: run the tool AppImages without FUSE (CI runners and containers lack it).
+    PATH="$tools:$PATH" APPIMAGE_EXTRACT_AND_RUN=1 DEPLOY_GTK_VERSION=3 \
+        LDAI_OUTPUT="$out" LINUXDEPLOY_OUTPUT_VERSION="$version" \
+        linuxdeploy-x86_64.AppImage \
+            --appdir "$appdir" \
+            --executable "$appdir/usr/bin/camera-center" \
+            --desktop-file platform/linux/camera-center.desktop \
+            --icon-file "$work/camera-center.png" \
+            --library "$appindicator" \
+            --plugin gtk \
+            --output appimage
+    echo "packaged $out"
+
 # Install the app for the current host platform.
 install:
     just install-{{ if host == "macos" { "osx" } else { host } }}

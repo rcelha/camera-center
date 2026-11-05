@@ -1,0 +1,127 @@
+name: Release packages
+
+# Builds the release packages (`just package-*`) on each OS:
+#   macOS   camera-center-<v>-macos-arm64.dmg
+#   Windows camera-center-<v>-windows-x64.zip
+#   Linux   camera-center_<v>_amd64.deb and camera-center-<v>-x86_64.AppImage
+# With a tag (from release-plz.yml, or a manual run to rebuild a release) it
+# attaches them plus SHA256SUMS to that release and publishes it. On pull
+# requests that touch packaging it only builds them, as workflow artifacts.
+#
+# Release builds deliberately skip the Rust cache so they're built from scratch.
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: Release tag (vX.Y.Z) to attach the packages to
+        type: string
+        required: true
+      ref:
+        description: Commit to build (defaults to the tag)
+        type: string
+        required: false
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag (vX.Y.Z) to rebuild and attach the packages to
+        type: string
+        required: true
+  pull_request:
+    paths:
+      - .github/workflows/release-build.yml
+      - crates/cc-app/Cargo.toml
+      - justfile
+      - platform/**
+      - rust-toolchain.toml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-build-${{ inputs.tag || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: macOS, os: macos-26, package: package-osx }
+          - { name: Windows, os: windows-2025, package: package-windows }
+          # Oldest supported Ubuntu runner, so the AppImage and the .deb's
+          # glibc requirement work on older distributions too.
+          - { name: Linux, os: ubuntu-22.04, package: package-linux }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref || inputs.tag || github.sha }}
+          lfs: true
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master @ 2026-11
+        with:
+          toolchain: 1.95.0
+          targets: aarch64-apple-darwin, x86_64-pc-windows-msvc, x86_64-unknown-linux-gnu
+      - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
+      - name: Linux system dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config clang libclang-dev libv4l-dev libudev-dev \
+            libfontconfig1-dev libfreetype-dev libxkbcommon-dev libwayland-dev libgtk-3-dev nasm \
+            libayatana-appindicator3-dev libxdo-dev dpkg-dev
+          cargo install --locked cargo-deb@3.8.0
+      - name: Version
+        id: version
+        shell: bash
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          crate=$(cargo pkgid -p cc-app); crate="${crate##*[#@]}"
+          if [ -n "$TAG" ] && [ "$TAG" != "v$crate" ]; then
+            echo "::error::tag $TAG doesn't match the workspace version $crate"; exit 1
+          fi
+          echo "version=$crate" >> "$GITHUB_OUTPUT"
+      - name: Verify models
+        shell: bash
+        run: just verify-models
+      - name: Package
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: just ${{ matrix.package }}
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: packages-${{ runner.os }}
+          path: dist/packages/*
+          if-no-files-found: error
+          compression-level: 0
+
+  publish:
+    name: Publish release
+    needs: build
+    if: inputs.tag != ''
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: packages-*
+          merge-multiple: true
+          path: dist
+      - name: Attach packages and publish
+        working-directory: dist
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          sha256sum -- * > SHA256SUMS
+          cat SHA256SUMS
+          gh release upload --clobber "$TAG" ./*
+          gh release edit "$TAG" --draft=false

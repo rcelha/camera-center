@@ -66,6 +66,7 @@ CAMERA_CENTER_SOURCE=test-pattern just run   # synthetic camera
 |--------|--------------|
 | `just build` | Builds every platform the host can build. Others are skipped; CI builds all three. |
 | `just build-osx` / `build-windows` / `build-linux` | Builds that platform's package into `dist/<platform>` |
+| `just package` / `package-osx` / `package-windows` / `package-linux` | Builds the release packages into `dist/packages` (see [Releases](#releases)) |
 | `just install` / `just uninstall` | Installs or removes the app for the current host |
 | `just install-osx` / `install-windows` / `install-linux` | Installs that platform's package (see below) |
 | `just test` | Runs all tests, including real inference on both models |
@@ -80,6 +81,46 @@ CAMERA_CENTER_SOURCE=test-pattern just run   # synthetic camera
 Settings are stored as TOML in the platform config directory. On macOS that's
 `~/Library/Application Support/com.cameracenter.Camera-Center/config.toml`.
 Set `CAMERA_CENTER_CONFIG` to use another file.
+
+## Releases
+
+Releases are automated with [release-plz](https://release-plz.dev) (`release-plz.toml`).
+Nothing is published to crates.io. Every crate shares the workspace version,
+and the latest `vX.Y.Z` tag is the previous release.
+
+1. Each push to `main` opens or updates a **release PR**. It bumps the version
+   in `Cargo.toml` and adds the new commits to `CHANGELOG.md`. Use
+   [Conventional Commits](https://www.conventionalcommits.org) (`feat:`, `fix:`,
+   `feat!:`) to choose the bump; other messages count as a patch and go under
+   "Other". Only changes inside `crates/` count, so a change that touches only
+   `platform/`, `models/` or the `justfile` doesn't open a release PR by itself.
+2. Merging the release PR tags `vX.Y.Z` and creates a **draft** GitHub Release.
+3. `.github/workflows/release-build.yml` builds the packages on each OS, attaches
+   them with a `SHA256SUMS` file, and publishes the release:
+
+| Platform | Package |
+|----------|---------|
+| macOS (Apple Silicon) | `camera-center-<v>-macos-arm64.dmg` |
+| Windows (x64) | `camera-center-<v>-windows-x64.zip` (with `INSTALL.txt`) |
+| Linux (x64) | `camera-center_<v>_amd64.deb`, `camera-center-<v>-x86_64.AppImage` |
+
+The Linux packages are built on Ubuntu 22.04, so they need glibc 2.35 or newer.
+To rebuild the packages for an existing tag, run the *Release packages* workflow
+manually. Pull requests that change packaging (`justfile`, `platform/`,
+`crates/cc-app/Cargo.toml`, the workflow) build the packages as workflow
+artifacts but don't publish anything.
+
+Repository setup: add a `RELEASE_PLZ_TOKEN` secret, a fine-grained PAT or GitHub
+App token with *Contents* and *Pull requests* write access. Without it,
+release-plz uses `GITHUB_TOKEN`, so CI doesn't run on the release PR. You then
+also need to enable *Settings → Actions → Allow GitHub Actions to create and
+approve pull requests*.
+
+The macOS package is **not signed or notarized** yet. Gatekeeper blocks it after
+download (`xattr -dr com.apple.quarantine /Applications/CameraCenter.app`
+works around that), and the camera extension won't activate without a
+Developer ID signature. Signing in CI needs the team's certificate and
+provisioning profiles as secrets.
 
 ## Models
 
