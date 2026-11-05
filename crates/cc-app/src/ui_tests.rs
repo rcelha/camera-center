@@ -10,6 +10,7 @@ use cc_engine::{Engine, EngineDeps, FrameSource, TestPattern};
 use cc_virtualcam::{NullCamera, SinkStatus, VirtualCamera};
 use freya::prelude::Size2D;
 use freya_core::element::AppComponent;
+use freya_testing::TestingNode;
 use freya_testing::prelude::*;
 
 use crate::ui::{CameraCenterApp, Page};
@@ -18,6 +19,10 @@ const WIDTH: f32 = 1180.0;
 const HEIGHT: f32 = 820.0;
 
 fn runner(page: Page) -> (TestingRunner, Arc<Engine>) {
+    runner_with_size(page, HEIGHT)
+}
+
+fn runner_with_size(page: Page, height: f32) -> (TestingRunner, Arc<Engine>) {
     let (preview_tx, previews) = async_channel::bounded(1);
     let (status_tx, statuses) = async_channel::bounded(4);
     let deps = EngineDeps {
@@ -55,7 +60,7 @@ fn runner(page: Page) -> (TestingRunner, Arc<Engine>) {
     };
     let (mut runner, _) = TestingRunner::new(
         AppComponent::new(app),
-        Size2D::new(WIDTH, HEIGHT),
+        Size2D::new(WIDTH, height),
         |_| {},
         1.0,
     );
@@ -64,11 +69,42 @@ fn runner(page: Page) -> (TestingRunner, Arc<Engine>) {
 }
 
 /// Elements whose right edge is outside the window (pushed off by a layout bug).
+///
+/// Absolutely positioned subtrees are skipped: they are overlays placed with
+/// offsets, not part of the flow. Freya's ScrollView scrollbar is one — its
+/// layout box starts at the content's right edge and it is drawn shifted back
+/// by its own width, so it only shows up here once the page is tall enough to
+/// scroll (e.g. with Windows' larger default font metrics).
 fn overflowing(runner: &TestingRunner) -> Vec<String> {
-    runner.find_many(|node, _| {
+    fn visit(node: TestingNode, out: &mut Vec<String>) {
+        if node.element().layout().layout.position.is_absolute() {
+            return;
+        }
         let area = node.layout().area;
-        (area.max_x() > WIDTH + 1.0 && area.width() > 0.0).then(|| format!("{area:?}"))
-    })
+        if area.max_x() > WIDTH + 1.0 && area.width() > 0.0 {
+            out.push(format!("{area:?}"));
+        }
+        for child in node.children() {
+            visit(child, out);
+        }
+    }
+    let mut out = Vec::new();
+    if let Some(root) = runner.find(|node, _| Some(node)) {
+        visit(root, &mut out);
+    }
+    out
+}
+
+/// Runs the overflow check on a window short enough that the page scrolls on
+/// every platform, so the scrollbar case is covered locally, not just on Windows.
+#[test]
+fn main_page_fits_short_window() {
+    let (runner, _engine) = runner_with_size(Page::Main, 520.0);
+    let overflow = overflowing(&runner);
+    assert!(
+        overflow.is_empty(),
+        "main (short): elements overflow the window: {overflow:#?}"
+    );
 }
 
 fn check_page(page: Page, name: &str) {
