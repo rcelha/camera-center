@@ -1,0 +1,90 @@
+name: Release
+
+# release-plz (see release-plz.toml):
+# - every push to main opens or updates the release PR (version bump + CHANGELOG.md);
+# - merging that PR tags vX.Y.Z and creates a draft GitHub Release, then the
+#   `packages` job builds every platform and publishes the release.
+#
+# Set the RELEASE_PLZ_TOKEN secret (a fine-grained PAT or GitHub App token with
+# contents + pull-requests write) so CI runs on the release PR: events created
+# with the default GITHUB_TOKEN don't trigger other workflows. Without it,
+# release-plz falls back to GITHUB_TOKEN, which needs "Allow GitHub Actions to
+# create and approve pull requests" enabled in the repository settings.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: Tag and draft release
+    if: github.repository == 'rcelha/camera-center'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master @ 2026-11
+        with:
+          toolchain: 1.95.0
+      - name: Run release-plz release
+        id: release-plz
+        uses: release-plz/action@8b5bf233ecb5779f63508db7cd050e948ee77cc2 # v0.5.144
+        with:
+          command: release
+          version: 0.3.174
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN || secrets.GITHUB_TOKEN }}
+      - name: Read the release tag
+        id: tag
+        env:
+          RELEASES: ${{ steps.release-plz.outputs.releases }}
+        run: |
+          tag=$(jq -r '.[]? | select(.package_name == "cc-app") | .tag' <<<"${RELEASES:-[]}")
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "release tag: ${tag:-none}"
+
+  release-pr:
+    name: Update release PR
+    if: github.repository == 'rcelha/camera-center'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      pull-requests: write
+    concurrency:
+      group: release-plz-pr-${{ github.ref }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master @ 2026-11
+        with:
+          toolchain: 1.95.0
+      - name: Run release-plz release-pr
+        uses: release-plz/action@8b5bf233ecb5779f63508db7cd050e948ee77cc2 # v0.5.144
+        with:
+          command: release-pr
+          version: 0.3.174
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN || secrets.GITHUB_TOKEN }}
+
+  packages:
+    name: Packages
+    needs: release
+    if: needs.release.outputs.tag != ''
+    permissions:
+      contents: write
+    uses: ./.github/workflows/release-build.yml
+    with:
+      tag: ${{ needs.release.outputs.tag }}
+      ref: ${{ github.sha }}

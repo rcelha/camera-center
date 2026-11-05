@@ -29,3 +29,25 @@ workspace = true
 [dev-dependencies]
 freya-core = "=0.4.3"
 freya-testing = "=0.4.3"
+
+# Debian package (`just package-deb`, built by cargo-deb). Asset sources are
+# relative to this crate; cargo-deb maps target/release to the --target dir.
+[package.metadata.deb]
+name = "camera-center"
+maintainer = "Rodrigo Corrêa <rcelha@users.noreply.github.com>"
+copyright = "Camera Center contributors"
+section = "video"
+priority = "optional"
+extended-description = """\
+Captures your webcam, applies background blur, background replacement and \
+portrait effects, and publishes the result as a v4l2loopback virtual camera."""
+# The tray icon dlopens libayatana-appindicator3, so dpkg-shlibdeps can't see it.
+depends = "$auto, libayatana-appindicator3-1"
+recommends = "v4l2loopback-dkms"
+assets = [
+    ["target/release/camera-center", "usr/bin/", "755"],
+    ["../../models/models.toml", "usr/share/camera-center/models/", "644"],
+    ["../../models/*.onnx", "usr/share/camera-center/models/", "644"],
+    ["../../platform/linux/camera-center.desktop", "usr/share/applications/", "644"],
+    ["assets/tray.png", "usr/share/icons/hicolor/64x64/apps/camera-center.png", "644"],
+]

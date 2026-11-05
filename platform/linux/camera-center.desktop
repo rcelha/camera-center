@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Camera Center
+Comment=Webcam effects and virtual camera
+Exec=camera-center
+Icon=camera-center
+Terminal=false
+Categories=AudioVideo;Video;
