@@ -70,10 +70,12 @@ CAMERA_CENTER_SOURCE=test-pattern just run   # synthetic camera
 | `just install-osx` / `install-windows` / `install-linux` | Installs that platform's package (see below) |
 | `just test` | Runs all tests, including real inference on both models |
 | `just fmt` | Runs `cargo fmt` |
-| `just check` | fmt check, clippy `-D warnings`, `cargo check`, `cargo deny`, model checksums, cross-target type-check |
+| `just check` | `just deny` + `just lint` |
+| `just deny` | `cargo deny` dependency audit (advisories, licenses, bans, sources) |
+| `just lint` | fmt check, clippy `-D warnings`, `cargo check`, model checksums, cross-target type-check |
 | `just fetch-models` / `just verify-models` | Re-downloads the models from their pinned revisions, or verifies their SHA-256 |
 
-`just check` requires `cargo install --locked cargo-deny@0.20.2`.
+`just check` requires `cargo install --locked cargo-deny@0.20.2`. Accepted advisories (unmaintained transitive crates with no upgrade path) are listed with reasons in `deny.toml`; security advisories are never ignored.
 
 Settings are stored as TOML in the platform config directory. On macOS that's
 `~/Library/Application Support/com.cameracenter.Camera-Center/config.toml`.

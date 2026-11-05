@@ -174,13 +174,19 @@ fmt:
     cargo fmt --all
 
 # All checks: formatting, lints, type-check, dependency audit, model integrity.
-check: verify-models
+check: deny lint
+
+# Formatting, lints and type-checks (host + cross targets). CI runs this per OS and `deny` once.
+lint: verify-models
     cargo fmt --all --check
     cargo clippy --workspace --all-targets --locked -- -D warnings
     cargo check --workspace --all-targets --locked
+    just check-cross
+
+# Dependency audit: advisories, licenses, bans, sources (no compilation needed, so it runs first).
+deny:
     @command -v cargo-deny >/dev/null || { echo "cargo-deny missing: cargo install --locked cargo-deny@0.20.2"; exit 1; }
     cargo deny --locked check
-    just check-cross
 
 # Type-check the platform backends of the other OSes (skips targets that aren't installed).
 check-cross:
