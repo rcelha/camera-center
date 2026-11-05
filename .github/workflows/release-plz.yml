@@ -25,6 +25,9 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: write
+      # release_always = false: release-plz checks the commit came from a
+      # merged release PR (GET /commits/{sha}/pulls).
+      pull-requests: read
     outputs:
       tag: ${{ steps.tag.outputs.tag }}
     steps:
