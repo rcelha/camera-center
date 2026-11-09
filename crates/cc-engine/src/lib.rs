@@ -396,6 +396,7 @@ fn processing_loop(shared: &Shared, sink: SinkFactory, on_preview: PreviewCallba
             s.process_ms = process_ms;
             s.output_fps = out_fps;
             s.processing_resolution = Some(dims);
+            s.sink_name = sink.name();
             s.sink_status = sink.status();
         });
 

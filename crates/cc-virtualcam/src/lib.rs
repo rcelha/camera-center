@@ -13,7 +13,7 @@ use anyhow::Result;
 use cc_core::Frame;
 
 #[cfg(target_os = "linux")]
-mod linux;
+pub mod linux;
 #[cfg(target_os = "macos")]
 pub mod macos;
 mod null;
@@ -83,10 +83,7 @@ pub fn to_output_size(frame: &Frame) -> Result<std::borrow::Cow<'_, [u8]>> {
 pub fn open_platform_camera() -> Box<dyn VirtualCamera> {
     #[cfg(target_os = "linux")]
     {
-        match linux::V4l2Loopback::open() {
-            Ok(cam) => Box::new(cam),
-            Err(status) => Box::new(NullCamera::with_status(status)),
-        }
+        Box::new(linux::LoopbackSink::new())
     }
     #[cfg(target_os = "macos")]
     {
