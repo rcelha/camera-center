@@ -807,7 +807,7 @@ dependencies = [
 
 [[package]]
 name = "cc-app"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "async-channel",
@@ -826,7 +826,7 @@ dependencies = [
 
 [[package]]
 name = "cc-capture"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "block2 0.6.2",
@@ -844,7 +844,7 @@ dependencies = [
 
 [[package]]
 name = "cc-core"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "fast_image_resize",
@@ -857,7 +857,7 @@ dependencies = [
 
 [[package]]
 name = "cc-engine"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -871,7 +871,7 @@ dependencies = [
 
 [[package]]
 name = "cc-mf-source"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "cc-vcam-protocol",
  "windows",
@@ -880,7 +880,7 @@ dependencies = [
 
 [[package]]
 name = "cc-ml"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "cc-core",
@@ -891,11 +891,11 @@ dependencies = [
 
 [[package]]
 name = "cc-vcam-protocol"
-version = "0.1.0"
+version = "0.1.1"
 
 [[package]]
 name = "cc-virtualcam"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "cc-core",
