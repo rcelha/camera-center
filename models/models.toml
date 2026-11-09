@@ -1,6 +1,30 @@
 # Versioned segmentation models. The .onnx files are stored with Git LFS.
 # `just verify-models` checks every file against its sha256 below;
 # `just fetch-models` re-downloads them from the pinned revisions.
+# Models with a `tflite_url` are converted from Google's MediaPipe TFLite files
+# by `just convert-models` (models/convert_mediapipe.py) instead.
+
+[[model]]
+id = "selfie_segmenter"
+file = "selfie_segmenter.onnx"
+sha256 = "dc6a9cd5414ce1341efd368cb558c9f37d42d557626f8f008e9d3ef44b069ad2"
+size = 446314
+source = "https://ai.google.dev/edge/mediapipe/solutions/vision/image_segmenter#selfie-model"
+tflite_url = "https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/1/selfie_segmenter.tflite"
+tflite_sha256 = "191ac9529ae506ee0beefa6b2c945a172dab9d07d1e802a290a4e4038226658b"
+license = "Apache-2.0 (MediaPipe Selfie Segmentation, Google)"
+input = "input float32 [1,256,256,3] NHWC RGB in [0,1]"
+
+[[model]]
+id = "selfie_segmenter_landscape"
+file = "selfie_segmenter_landscape.onnx"
+sha256 = "5fca878ffce634413ee86a18f0e764b72690c9f5ef072a378287b80c4914f02a"
+size = 446411
+source = "https://ai.google.dev/edge/mediapipe/solutions/vision/image_segmenter#selfie-model"
+tflite_url = "https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter_landscape/float16/1/selfie_segmenter_landscape.tflite"
+tflite_sha256 = "490e9ea734313e0de10fa0cd9e3c6133e36ea4db2b7a49bde9ef019f72796b8e"
+license = "Apache-2.0 (MediaPipe Selfie Segmentation, Google)"
+input = "input float32 [1,144,256,3] NHWC RGB in [0,1]"
 
 [[model]]
 id = "u2net_human_seg"

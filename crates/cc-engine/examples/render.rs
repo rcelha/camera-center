@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
-use cc_core::{AppConfig, EffectToggles, Frame, Pipeline, SegmentationModel, Segmenter};
+use cc_core::{AppConfig, EffectToggles, Frame, Pipeline, SegmentationModel};
 use cc_engine::{FrameSource, TestPattern};
 
 fn save(frame: &Frame, path: &std::path::Path) -> Result<()> {
@@ -33,8 +33,7 @@ fn main() -> Result<()> {
     save(&frame, &out.join("0-original.png"))?;
 
     for model in SegmentationModel::ALL {
-        let mut seg =
-            cc_ml::U2Net::load(&cc_ml::model_path(model)?, cc_ml::ExecutionBackend::Auto)?;
+        let mut seg = cc_ml::load(model, cc_ml::ExecutionBackend::Auto)?;
         let mask = Arc::new(seg.segment(&frame)?);
         let m = mask.resized(frame.width, frame.height)?;
         let mask_img = Frame::new(

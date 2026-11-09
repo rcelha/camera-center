@@ -1,0 +1,3 @@
+# tf2onnx 1.16.1 declares protobuf<4 but works with 4.25 (which mediapipe needs);
+# the conversion is checked against MediaPipe's own output on every run.
+protobuf==4.25.9

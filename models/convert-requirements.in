@@ -1,0 +1,11 @@
+# Toolchain for convert_mediapipe.py. Lock with:
+#   uv pip compile --universal --python-version 3.11 --generate-hashes \
+#     --exclude-newer 2026-10-26 \
+#     --override models/convert-overrides.txt models/convert-requirements.in -o models/convert-requirements.txt
+tensorflow==2.15.1
+tf2onnx==1.16.1
+onnx==1.16.2
+onnxruntime==1.19.2
+onnxsim==0.4.36
+numpy==1.26.4
+mediapipe==0.10.14

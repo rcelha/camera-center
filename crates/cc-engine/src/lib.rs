@@ -74,11 +74,7 @@ impl EngineDeps {
                 )?;
                 Ok(Box::new(session) as Box<dyn FrameSource>)
             }),
-            segmenter: Box::new(|model| {
-                let path = cc_ml::model_path(model)?;
-                let seg = cc_ml::U2Net::load(&path, cc_ml::ExecutionBackend::Auto)?;
-                Ok(Box::new(seg) as Box<dyn Segmenter>)
-            }),
+            segmenter: Box::new(|model| cc_ml::load(model, cc_ml::ExecutionBackend::Auto)),
             sink: Box::new(cc_virtualcam::open_platform_camera),
         }
     }
@@ -364,7 +360,7 @@ fn processing_loop(shared: &Shared, sink: SinkFactory, on_preview: PreviewCallba
         let cfg = shared.config.load_full();
 
         let mask = if pipeline.needs_mask(&cfg) {
-            let (iw, ih) = (320, 320);
+            let (iw, ih) = cfg.model.input_size();
             if let Ok(small) = frame.resized(iw, ih) {
                 shared.seg_input.put(small);
             }
