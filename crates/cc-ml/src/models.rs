@@ -45,11 +45,14 @@ pub fn model_path(model: SegmentationModel) -> Result<PathBuf> {
     if !path.is_file() {
         bail!("model file {} is missing", path.display());
     }
-    // A Git LFS pointer file is ~130 bytes; real models are megabytes.
-    let len = path.metadata()?.len();
-    if len < 1024 * 1024 {
+    // A Git LFS pointer is a ~130 byte text file starting with this line. The
+    // smallest real model (selfie_segmenter) is ~450 KB, so check the content
+    // rather than the size.
+    let mut head = [0u8; 24];
+    let n = std::io::Read::read(&mut std::fs::File::open(&path)?, &mut head)?;
+    if head[..n].starts_with(b"version https://git-lfs") {
         bail!(
-            "{} is only {len} bytes; it looks like a Git LFS pointer, run `git lfs pull`",
+            "{} is a Git LFS pointer, run `git lfs pull`",
             path.display()
         );
     }

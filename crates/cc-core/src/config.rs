@@ -31,7 +31,7 @@ impl Default for AppConfig {
         Self {
             input_device: None,
             resolution: ProcessingResolution::P720,
-            model: SegmentationModel::U2netHumanSeg,
+            model: SegmentationModel::SelfieSegmenter,
             background_image: None,
             blur_strength: 50,
             effects: EffectToggles::default(),
@@ -92,27 +92,50 @@ impl ProcessingResolution {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SegmentationModel {
+    /// MediaPipe selfie segmenter, 256x256 (~0.4 MB, a few ms per frame on CPU).
+    SelfieSegmenter,
+    /// MediaPipe selfie segmenter, 256x144 landscape variant (fastest).
+    SelfieSegmenterLandscape,
     /// U²-Net trained for human segmentation (~176 MB, best quality).
     U2netHumanSeg,
-    /// U²-Net small (~4.6 MB, fastest).
+    /// U²-Net small (~4.6 MB).
     U2netp,
 }
 
 impl SegmentationModel {
-    pub const ALL: [SegmentationModel; 2] = [Self::U2netHumanSeg, Self::U2netp];
+    pub const ALL: [SegmentationModel; 4] = [
+        Self::SelfieSegmenter,
+        Self::SelfieSegmenterLandscape,
+        Self::U2netp,
+        Self::U2netHumanSeg,
+    ];
 
     /// File name inside the models directory (see `models/models.toml`).
     pub fn file_name(self) -> &'static str {
         match self {
+            Self::SelfieSegmenter => "selfie_segmenter.onnx",
+            Self::SelfieSegmenterLandscape => "selfie_segmenter_landscape.onnx",
             Self::U2netHumanSeg => "u2net_human_seg.onnx",
             Self::U2netp => "u2netp.onnx",
         }
     }
 
+    /// Model input `(width, height)`. Frames are scaled to this size before
+    /// they are handed to the segmentation thread.
+    pub fn input_size(self) -> (u32, u32) {
+        match self {
+            Self::SelfieSegmenter => (256, 256),
+            Self::SelfieSegmenterLandscape => (256, 144),
+            Self::U2netHumanSeg | Self::U2netp => (320, 320),
+        }
+    }
+
     pub fn label(self) -> &'static str {
         match self {
-            Self::U2netHumanSeg => "U²-Net human seg (quality)",
-            Self::U2netp => "U²-Net-p (fast)",
+            Self::SelfieSegmenter => "MediaPipe selfie (fast)",
+            Self::SelfieSegmenterLandscape => "MediaPipe selfie landscape (fastest)",
+            Self::U2netHumanSeg => "U²-Net human seg (quality, slow)",
+            Self::U2netp => "U²-Net-p (slow)",
         }
     }
 }
@@ -185,10 +208,28 @@ mod tests {
     }
 
     #[test]
+    fn model_names_are_stable() {
+        // Persisted in config files: renaming a variant breaks existing configs.
+        for (model, name) in [
+            (SegmentationModel::SelfieSegmenter, "selfie_segmenter"),
+            (
+                SegmentationModel::SelfieSegmenterLandscape,
+                "selfie_segmenter_landscape",
+            ),
+            (SegmentationModel::U2netHumanSeg, "u2net_human_seg"),
+            (SegmentationModel::U2netp, "u2netp"),
+        ] {
+            let cfg = AppConfig::from_toml(&format!("model = \"{name}\"")).unwrap();
+            assert_eq!(cfg.model, model);
+            assert_eq!(model.file_name(), format!("{name}.onnx"));
+        }
+    }
+
+    #[test]
     fn missing_fields_use_defaults() {
         let cfg = AppConfig::from_toml("blur_strength = 10").unwrap();
         assert_eq!(cfg.blur_strength, 10);
-        assert_eq!(cfg.model, SegmentationModel::U2netHumanSeg);
+        assert_eq!(cfg.model, SegmentationModel::SelfieSegmenter);
         assert_eq!(cfg.effects, EffectToggles::default());
     }
 

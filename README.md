@@ -32,7 +32,7 @@ capture thread ──Latest<Frame>──▶ processing thread ──▶ virtual 
                                    │      ▲                 └─▶ UI previews (Freya)
                       Latest<Frame>│      │ArcSwap<Mask>
                                    ▼      │
-                             segmentation thread (ONNX Runtime, U²-Net)
+                             segmentation thread (ONNX Runtime, MediaPipe selfie / U²-Net)
 ```
 
 - Each hand-off keeps only the newest item. A slow stage drops frames instead
@@ -44,7 +44,7 @@ capture thread ──Latest<Frame>──▶ processing thread ──▶ virtual 
 | Crate | Purpose |
 |-------|---------|
 | `cc-core` | Frame/Mask types, config, blur, resize, pixel conversion, effects, `Pipeline` |
-| `cc-ml` | ONNX Runtime U²-Net segmenter (CoreML / DirectML / CPU) |
+| `cc-ml` | ONNX Runtime person segmenters, MediaPipe selfie and U²-Net (CoreML / DirectML / CPU) |
 | `cc-capture` | Camera enumeration and capture. macOS uses AVFoundation directly; Linux/Windows use nokhwa |
 | `cc-virtualcam` | `VirtualCamera` trait plus the v4l2loopback, CoreMediaIO sink and Media Foundation backends |
 | `cc-vcam-protocol` | Shared-memory frame protocol between the Windows app and its media source |
@@ -69,12 +69,13 @@ CAMERA_CENTER_SOURCE=test-pattern just run   # synthetic camera
 | `just package` / `package-osx` / `package-windows` / `package-linux` | Builds the release packages into `dist/packages` (see [Releases](#releases)) |
 | `just install` / `just uninstall` | Installs or removes the app for the current host |
 | `just install-osx` / `install-windows` / `install-linux` | Installs that platform's package (see below) |
-| `just test` | Runs all tests, including real inference on both models |
+| `just test` | Runs all tests, including real inference on every model |
 | `just fmt` | Runs `cargo fmt` |
 | `just check` | `just deny` + `just lint` |
 | `just deny` | `cargo deny` dependency audit (advisories, licenses, bans, sources) |
 | `just lint` | fmt check, clippy `-D warnings`, `cargo check`, model checksums, cross-target type-check |
-| `just fetch-models` / `just verify-models` | Re-downloads the models from their pinned revisions, or verifies their SHA-256 |
+| `just fetch-models` / `just verify-models` | Re-downloads the U²-Net models from their pinned revisions, or verifies every model's SHA-256 |
+| `just convert-models` | Rebuilds the MediaPipe ONNX models from Google's TFLite files (needs `uv`, see [Models](#models)) |
 
 `just check` requires `cargo install --locked cargo-deny@0.20.2`. Accepted advisories (unmaintained transitive crates with no upgrade path) are listed with reasons in `deny.toml`; security advisories are never ignored.
 
@@ -127,22 +128,49 @@ provisioning profiles as secrets.
 ## Models
 
 Models are versioned in `models/` with Git LFS. `models/models.toml` records
-each file's source repository, pinned revision, URL and SHA-256.
+each file's source, pinned revision or URL, and SHA-256.
 
-| Model | Size | Notes |
-|-------|------|-------|
-| `u2net_human_seg` | 176 MB | Default. Trained for people, so it gives cleaner edges |
-| `u2netp` | 4.6 MB | Faster, for low-end machines |
+| Model | Size | Input | Notes |
+|-------|------|-------|-------|
+| `selfie_segmenter` | 0.4 MB | 256×256 | Default. MediaPipe selfie segmentation. Fast enough for CPU-only machines |
+| `selfie_segmenter_landscape` | 0.4 MB | 256×144 | Same network at 16:9. Fastest, slightly coarser |
+| `u2netp` | 4.6 MB | 320×320 | U²-Net small |
+| `u2net_human_seg` | 176 MB | 320×320 | Cleanest edges around hair, but slow without an accelerator |
 
 Switch models under Settings → Segmentation. **Processing resolution**
 (Native / 1080p / 720p / 480p) caps capture and effect resolution, so
 powerful machines can process at native resolution and slower ones can force
 720p. The virtual camera always outputs 1920×1080 and letterboxes when needed.
 
-Measured on an M3 Max, per 320×320 inference with CoreML on the Neural Engine:
-about 44 ms for `u2netp` and 96 ms for `u2net_human_seg`. Because
-segmentation is asynchronous, video stays at the camera's frame rate either
-way.
+Per-inference latency on an M3 Max (`cargo run -p cc-ml --release --example bench`).
+Linux has no accelerator, so it gets the CPU column:
+
+| Model | CPU (4 threads) | CoreML (Neural Engine) |
+|-------|-----------------|------------------------|
+| `selfie_segmenter` | 2.3 ms | 3.1 ms |
+| `selfie_segmenter_landscape` | 1.5 ms | 2.3 ms |
+| `u2netp` | 135 ms | 33 ms |
+| `u2net_human_seg` | 355 ms | 75 ms |
+
+Segmentation is asynchronous, so video stays at the camera's frame rate and a
+slow model only makes the mask lag. On CPU, though, U²-Net keeps several cores
+busy, which competes with capture and effects.
+
+### MediaPipe models (converted)
+
+Google publishes the selfie segmenter only as TFLite (Apache-2.0,
+[model card](https://storage.googleapis.com/mediapipe-assets/Model%20Card%20MediaPipe%20Selfie%20Segmentation.pdf)).
+`models/convert_mediapipe.py` converts it with tf2onnx and replaces MediaPipe's
+one custom op, `Convolution2DTransposeBias` (the final 2× upsample), with a
+standard `ConvTranspose`. It also rewrites a few nodes so the ONNX Runtime
+CoreML builder accepts them, and checks the result against MediaPipe's own
+runtime (max difference ≈1e-4 on a 0–1 probability). `just convert-models`
+downloads the pinned TFLite files, checks their SHA-256, converts them with
+the hash-locked toolchain in `models/convert-requirements.txt`, and verifies
+the output is byte-identical to the committed files.
+
+The model takes NHWC RGB in [0, 1] and returns a person probability. It is
+used as is, without U²-Net's min-max stretch, so an empty room stays background.
 
 ## Platform setup
 

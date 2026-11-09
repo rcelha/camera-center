@@ -2,18 +2,19 @@
 
 use std::time::Instant;
 
-use cc_core::{Frame, SegmentationModel, Segmenter};
-use cc_ml::{ExecutionBackend, U2Net, model_path};
+use cc_core::{Frame, SegmentationModel};
+use cc_ml::ExecutionBackend;
 
 fn main() -> anyhow::Result<()> {
-    let frame = Frame::filled(320, 320, [120, 100, 90, 255]);
     for model in SegmentationModel::ALL {
+        let (w, h) = model.input_size();
+        let frame = Frame::filled(w, h, [120, 100, 90, 255]);
         for backend in [ExecutionBackend::Cpu, ExecutionBackend::Auto] {
             let t = Instant::now();
-            let mut seg = U2Net::load(&model_path(model)?, backend)?;
+            let mut seg = cc_ml::load(model, backend)?;
             let load = t.elapsed();
             seg.segment(&frame)?; // warm-up
-            let n = 10;
+            let n = 30;
             let t = Instant::now();
             for _ in 0..n {
                 seg.segment(&frame)?;

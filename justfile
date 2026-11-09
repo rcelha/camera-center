@@ -349,3 +349,24 @@ fetch-models:
         mv "$file.partial" "$file"
     done < <(awk -F'"' '/^file =/{f=$2} /^url =/{print f, $2}' models.toml)
     just verify-models
+
+# Re-create the MediaPipe models (`tflite_url` in models/models.toml) by converting
+# Google's TFLite files to ONNX with a pinned toolchain (needs uv), then verify them.
+convert-models:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    command -v uv >/dev/null || { echo "uv missing: https://docs.astral.sh/uv/"; exit 1; }
+    work=$(mktemp -d)
+    trap 'rm -rf "$work"' EXIT
+    uv venv -q -p 3.11 "$work/venv"
+    VIRTUAL_ENV="$work/venv" uv pip sync -q --require-hashes models/convert-requirements.txt
+    mkdir "$work/tflite"
+    while read -r file url sha; do
+        src="$work/tflite/${file%.onnx}.tflite"
+        echo "converting $url"
+        curl -fsSL --proto '=https' -o "$src" "$url"
+        actual=$( (sha256sum "$src" 2>/dev/null || shasum -a 256 "$src") | cut -d' ' -f1)
+        if [ "$actual" != "$sha" ]; then echo "checksum mismatch for $url"; exit 1; fi
+        "$work/venv/bin/python" -I models/convert_mediapipe.py "$src" "models/$file"
+    done < <(awk -F'"' '/^file =/{f=$2} /^tflite_url =/{u=$2} /^tflite_sha256 =/{print f, u, $2}' models/models.toml)
+    just verify-models
