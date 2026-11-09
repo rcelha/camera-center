@@ -6,9 +6,7 @@ use anyhow::{Context, Result, anyhow, bail};
 use cc_core::Frame;
 use nokhwa::Camera;
 use nokhwa::pixel_format::RgbAFormat;
-use nokhwa::utils::{
-    ApiBackend, CameraFormat, CameraIndex, FrameFormat, RequestedFormat, RequestedFormatType,
-};
+use nokhwa::utils::{CameraFormat, CameraIndex, FrameFormat, RequestedFormat, RequestedFormatType};
 use tracing::warn;
 
 use crate::{DeviceInfo, FormatCandidate, choose_format};
@@ -17,7 +15,48 @@ pub fn request_permission(_timeout: Duration) -> bool {
     true
 }
 
+/// Enumerates V4L2 nodes directly: nokhwa's query also lists metadata and IR-only nodes, which share
+/// the camera's name, so opening by name could pick a node with no usable format.
+#[cfg(target_os = "linux")]
 pub fn list_devices() -> Result<Vec<DeviceInfo>> {
+    use v4l::capability::Flags;
+    use v4l::video::Capture;
+
+    let supported = [*b"YUYV", *b"NV12", *b"MJPG", *b"RGB3"];
+    let mut nodes: Vec<(usize, String)> = v4l::context::enum_devices()
+        .into_iter()
+        .filter_map(|node| {
+            let device = v4l::Device::with_path(node.path()).ok()?;
+            let caps = device.query_caps().ok()?;
+            if !caps.capabilities.contains(Flags::VIDEO_CAPTURE) {
+                return None;
+            }
+            let formats = device.enum_formats().ok()?;
+            if !formats.iter().any(|f| supported.contains(&f.fourcc.repr)) {
+                return None;
+            }
+            Some((node.index(), node.name().unwrap_or(caps.card)))
+        })
+        .collect();
+    nodes.sort_by_key(|(index, _)| *index);
+    let names: Vec<String> = nodes.iter().map(|(_, n)| n.clone()).collect();
+    Ok(nodes
+        .into_iter()
+        .map(|(index, name)| DeviceInfo {
+            name: if names.iter().filter(|n| **n == name).count() > 1 {
+                format!("{name} (/dev/video{index})")
+            } else {
+                name
+            },
+            id: index.to_string(),
+        })
+        .collect())
+}
+
+#[cfg(not(target_os = "linux"))]
+pub fn list_devices() -> Result<Vec<DeviceInfo>> {
+    use nokhwa::utils::ApiBackend;
+
     let devices = nokhwa::query(ApiBackend::Auto).context("failed to enumerate cameras")?;
     Ok(devices
         .into_iter()

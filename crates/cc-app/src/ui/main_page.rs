@@ -104,7 +104,13 @@ fn can_install() -> bool {
     cc_virtualcam::macos::install_blocker().is_none()
 }
 
-#[cfg(not(target_os = "macos"))]
+/// Loading v4l2loopback needs polkit's pkexec for the admin password prompt.
+#[cfg(target_os = "linux")]
+fn can_install() -> bool {
+    cc_virtualcam::linux::can_load_module()
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
 fn can_install() -> bool {
     false
 }
@@ -116,7 +122,21 @@ fn install_button() -> Button {
         .child("Install extension")
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(target_os = "linux")]
+fn install_button() -> Button {
+    let loading =
+        cc_virtualcam::linux::module_state() == cc_virtualcam::linux::ModuleState::Loading;
+    Button::new()
+        .enabled(!loading)
+        .on_press(|_| cc_virtualcam::linux::load_module())
+        .child(if loading {
+            "Installing…"
+        } else {
+            "Install virtual camera"
+        })
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
 fn install_button() -> Rect {
     rect()
 }

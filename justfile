@@ -143,7 +143,7 @@ package-deb: build-linux
     echo "packaged $out"
 
 # Build the x86_64 AppImage with linuxdeploy (downloaded at a pinned version and checksum). VERSION overrides the Cargo version.
-package-appimage: build-linux
+package-appimage:
     #!/usr/bin/env bash
     set -euo pipefail
     [ "{{host}}" = "linux" ] || { echo "skipping package-appimage: requires a Linux host"; exit 0; }
@@ -166,15 +166,34 @@ package-appimage: build-linux
     fetch linuxdeploy-plugin-gtk.sh \
         https://raw.githubusercontent.com/linuxdeploy/linuxdeploy-plugin-gtk/7a3fbc31a9e5075073ff8790f26effbac5f84453/linuxdeploy-plugin-gtk.sh \
         b0f4cbc684a0103a9651f0955b635eaea0096b3a66c0f5a2c2aa337960375171
+    fetch onnxruntime-linux-x64-1.31.1.tgz \
+        https://github.com/microsoft/onnxruntime/releases/download/v1.31.1/onnxruntime-linux-x64-1.31.1.tgz \
+        c849e36a1ef3e22d4ff217b9d1ce4a3cf5b9467b975610913ae959ad5b16bdc9
 
-    # The tray icon dlopens libayatana-appindicator3, so linuxdeploy can't find it through ldd.
-    appindicator=$(/sbin/ldconfig -p | awk '/libayatana-appindicator3\.so\.1 /{print $NF; exit}')
-    [ -n "$appindicator" ] || { echo "libayatana-appindicator3.so.1 not found (apt install libayatana-appindicator3-dev)"; exit 1; }
+    # ort's default prebuilt static ONNX Runtime needs glibc 2.39. Link the official shared build instead
+    # (glibc 2.28) and bundle it, so the AppImage runs on older distros. Built in its own target dir so the
+    # .deb binary (static ONNX Runtime) is left untouched.
+    ort="{{target_dir}}/package/onnxruntime"
+    rm -rf "$ort" && mkdir -p "$ort" && tar -xzf "$tools/onnxruntime-linux-x64-1.31.1.tgz" -C "$ort" --strip-components=1
+    build="{{target_dir}}/appimage-build"
+    ORT_LIB_LOCATION="$ort/lib" ORT_PREFER_DYNAMIC_LINK=1 CARGO_TARGET_DIR="$build" \
+        cargo build --release --locked --target x86_64-unknown-linux-gnu -p cc-app
+
+    # Libraries loaded with dlopen are invisible to linuxdeploy's ldd scan, so list them explicitly:
+    # the tray icon (ayatana-appindicator) and winit's keyboard/cursor/X11 extension libraries.
+    # Graphics drivers, glibc, X11/Wayland core and fontconfig stay on the host (linuxdeploy excludelist).
+    libs=(--library "$ort/lib/libonnxruntime.so.1")
+    for lib in libayatana-appindicator3.so.1 libxkbcommon.so.0 libxkbcommon-x11.so.0 libXcursor.so.1 \
+               libXrandr.so.2 libXi.so.6 libXinerama.so.1 libwayland-cursor.so.0; do
+        path=$(/sbin/ldconfig -p | awk -v l="$lib" '$1 == l && /x86-64/ && !p {p = $NF} END {print p}')
+        [ -n "$path" ] || { echo "$lib not found (see the Linux system dependencies in the README)"; exit 1; }
+        libs+=(--library "$path")
+    done
 
     work="{{target_dir}}/package/appimage"
     appdir="$work/AppDir"
     rm -rf "$work" && mkdir -p "$appdir/usr/share/camera-center/models" "{{dist}}/packages"
-    install -Dm755 "{{target_dir}}/x86_64-unknown-linux-gnu/release/camera-center" "$appdir/usr/bin/camera-center"
+    install -Dm755 "$build/x86_64-unknown-linux-gnu/release/camera-center" "$appdir/usr/bin/camera-center"
     install -m644 models/models.toml models/*.onnx "$appdir/usr/share/camera-center/models/"
     install -m644 crates/cc-app/assets/tray.png "$work/camera-center.png"
 
@@ -182,13 +201,14 @@ package-appimage: build-linux
     rm -f "$out"
     # APPIMAGE_EXTRACT_AND_RUN: run the tool AppImages without FUSE (CI runners and containers lack it).
     PATH="$tools:$PATH" APPIMAGE_EXTRACT_AND_RUN=1 DEPLOY_GTK_VERSION=3 \
+        LD_LIBRARY_PATH="$ort/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
         LDAI_OUTPUT="$out" LINUXDEPLOY_OUTPUT_VERSION="$version" \
         linuxdeploy-x86_64.AppImage \
             --appdir "$appdir" \
             --executable "$appdir/usr/bin/camera-center" \
             --desktop-file platform/linux/camera-center.desktop \
             --icon-file "$work/camera-center.png" \
-            --library "$appindicator" \
+            "${libs[@]}" \
             --plugin gtk \
             --output appimage
     echo "packaged $out"
